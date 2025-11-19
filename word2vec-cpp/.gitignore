@@ -1,0 +1,15 @@
+build/
+*.bin
+*.txt
+data/*.txt
+!README.md
+.vscode/
+*.o
+*.a
+
+# 测试文件
+test_*.txt
+
+# 第三方库（但保留.gitmodules）
+third_party/googletest/*
+!third_party/googletest/.gitignore
