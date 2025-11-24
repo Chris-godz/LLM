@@ -4,7 +4,7 @@ import pickle
 from pathlib import Path
 
 # Add the project root to sys.path so we can import cs336_basics
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(project_root))
 
 from cs336_basics.bpe import train_bpe
@@ -38,10 +38,6 @@ def main():
     print(f"Training Tokenizer on {input_path}...")
     print("Target Vocab Size: 10,000")
     
-    # Train BPE
-    # 注意：train_bpe 函数本身没有进度条参数，如果需要进度条，
-    # 我们需要修改 train_bpe 函数或者在这里只是简单打印开始和结束。
-    # 为了不修改核心库代码，我们这里只打印更详细的日志。
     print("Starting BPE training (this may take a while)...")
     vocab, merges = train_bpe(
         input_path=input_path,

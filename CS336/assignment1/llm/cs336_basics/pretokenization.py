@@ -1,5 +1,6 @@
 import os
 from typing import BinaryIO
+from tqdm import tqdm
 
 
 def find_chunk_boundaries(
@@ -27,7 +28,11 @@ def find_chunk_boundaries(
 
     mini_chunk_size = 4096  # Read ahead by 4k bytes at a time
 
-    for bi in range(1, len(chunk_boundaries) - 1):
+    # 使用 tqdm 显示寻找切分点的进度
+    # 我们需要处理的是中间的边界点 (1 到 len-2)
+    boundary_indices = range(1, len(chunk_boundaries) - 1)
+    
+    for bi in tqdm(boundary_indices, desc="Finding chunk boundaries", unit="boundary"):
         initial_position = chunk_boundaries[bi]
         file.seek(initial_position)  # Start at boundary guess
         while True:
