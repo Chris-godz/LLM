@@ -96,12 +96,15 @@ VECTOR_SIZE=100 MAX_ITER=10 WINDOW_SIZE=10 ./demo.sh
 ## 🔍 数学公式
 
 损失函数：
+
 $$J = \sum_{i,j} f(X_{ij}) \big(w_i^T \tilde{w}_j + b_i + \tilde{b}_j - \log X_{ij}\big)^2$$
 
 权重函数：
+
 $$f(x) = \begin{cases}(x/x_{\max})^{\alpha}, & x < x_{\max} \\ 1, & x \ge x_{\max}\end{cases}$$
 
 自适应更新（AdaGrad）：
+
 $$\theta_{t} = \theta_{t-1} - \eta \frac{g_t}{\sqrt{G_t}} \quad ; \quad G_t = G_{t-1} + g_t^2$$
 
 ## 📊 评估指标（text8 示例）
