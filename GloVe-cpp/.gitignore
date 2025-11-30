@@ -1,1 +1,8 @@
 build/
+vectors.txt
+vocab.txt
+test_vectors.txt
+*.bin
+text8
+vectors
+.venv/

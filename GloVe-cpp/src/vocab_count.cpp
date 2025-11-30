@@ -50,75 +50,132 @@ bool compare_vocab(const VOCAB& a, const VOCAB& b) {
 /**
  * @brief 构建词汇表
  * 
- * TODO: 实现这个函数
- * 参考: GloVe/src/vocab_count.c 中的 get_counts
+ * 从标准输入读取语料，统计词频，按频率降序输出到标准输出。
  * 
- * 步骤:
- * 1. 使用哈希表统计词频
- * 2. 转移到数组并排序
- * 3. 应用过滤条件
- * 4. 输出结果
+ * 算法流程:
+ * 1. 逐词读取语料，用哈希表统计每个词的出现次数
+ * 2. 将哈希表转移到数组，便于排序
+ * 3. 按词频降序排序（词频相同则按字母顺序）
+ * 4. 应用 min_count 和 max_vocab 过滤
+ * 5. 输出格式: "word count\n"
+ * 
+ * @return 0 成功, 1 失败
  */
 int get_counts() {
-    // TODO: 实现词汇统计
-    //
-    // std::unordered_map<std::string, long long> word_counts;
-    // long long total_tokens = 0;
-    // std::string word;
-    //
-    // std::cerr << "BUILDING VOCABULARY\n";
-    // if (verbose > 1) std::cerr << "Processed " << total_tokens << " tokens.";
-    //
-    // while (!std::cin.eof()) {
-    //     int nl = get_word(word, std::cin);
-    //     if (nl) continue;
-    //     if (word.empty()) continue;
-    //     if (word == "<unk>") {
-    //         std::cerr << "\nError: <unk> found in corpus. Please remove it.\n";
-    //         return 1;
-    //     }
-    //     word_counts[word]++;
-    //     total_tokens++;
-    //     if (verbose > 1 && total_tokens % 100000 == 0) {
-    //         std::cerr << "\033[11G" << total_tokens << " tokens.";
-    //     }
-    // }
-    // if (verbose > 1) std::cerr << "\033[0GProcessed " << total_tokens << " tokens.\n";
-    //
-    // // 转移到数组
-    // std::vector<VOCAB> vocab;
-    // vocab.reserve(word_counts.size());
-    // for (const auto& pair : word_counts) {
-    //     vocab.push_back({pair.first, pair.second});
-    // }
-    // if (verbose > 1) std::cerr << "Counted " << vocab.size() << " unique words.\n";
-    //
-    // // 排序
-    // long long actual_max = (max_vocab > 0 && max_vocab < vocab.size()) ? max_vocab : vocab.size();
-    // if (max_vocab > 0 && max_vocab < vocab.size()) {
-    //     std::partial_sort(vocab.begin(), vocab.begin() + max_vocab, vocab.end(), compare_vocab);
-    // }
-    // std::sort(vocab.begin(), vocab.begin() + actual_max, compare_vocab_tie);
-    //
-    // // 输出
-    // long long i;
-    // for (i = 0; i < actual_max; i++) {
-    //     if (vocab[i].count < min_count) {
-    //         if (verbose > 0) std::cerr << "Truncating vocabulary at min count " << min_count << ".\n";
-    //         break;
-    //     }
-    //     std::cout << vocab[i].word << " " << vocab[i].count << "\n";
-    // }
-    //
-    // if (i == max_vocab && max_vocab < vocab.size()) {
-    //     if (verbose > 0) std::cerr << "Truncating vocabulary at size " << max_vocab << ".\n";
-    // }
-    // std::cerr << "Using vocabulary of size " << i << ".\n\n";
-    //
-    // return 0;
+    // ========================================================================
+    // 第一步：统计词频
+    // ========================================================================
+    // 使用 unordered_map 作为哈希表，key 是单词，value 是出现次数
+    // 时间复杂度 O(n)，n 为语料中的 token 数量
+    std::unordered_map<std::string, long long> word_counts;
+    long long total_tokens = 0;  // 总 token 数（含重复）
+    std::string word;
     
-    std::cerr << "Error: get_counts() not implemented yet\n";
-    return 1;
+    std::cerr << "BUILDING VOCABULARY\n";
+    if (verbose > 1) {
+        std::cerr << "Processed " << total_tokens << " tokens.";
+    }
+    
+    // 从标准输入逐词读取
+    // get_word 返回 1 表示遇到换行或 EOF（文档边界），0 表示正常读取
+    while (!std::cin.eof()) {
+        int is_newline = get_word(word, std::cin);
+        
+        // 跳过空词和文档边界
+        if (is_newline || word.empty()) {
+            continue;
+        }
+        
+        // <unk> 是保留词，不允许出现在原始语料中
+        // 后续处理会用 <unk> 表示未登录词
+        if (word == "<unk>") {
+            std::cerr << "\nError: <unk> found in corpus.\n";
+            std::cerr << "Please remove <unk> tokens from corpus.\n";
+            return 1;
+        }
+        
+        // 统计词频：如果词不存在，unordered_map 会自动初始化为 0
+        word_counts[word]++;
+        total_tokens++;
+        
+        // 每处理 10 万个 token 打印一次进度
+        // \033[11G 是 ANSI 转义码，将光标移动到第 11 列，实现原地更新
+        if (verbose > 1 && total_tokens % 100000 == 0) {
+            std::cerr << "\033[11G" << total_tokens << " tokens.";
+        }
+    }
+    
+    // 打印最终统计
+    if (verbose > 1) {
+        std::cerr << "\033[0GProcessed " << total_tokens << " tokens.\n";
+    }
+    
+    // ========================================================================
+    // 第二步：转移到数组
+    // ========================================================================
+    // 哈希表不支持排序，需要转移到 vector
+    std::vector<VOCAB> vocab;
+    vocab.reserve(word_counts.size());  // 预分配空间，避免多次扩容
+    
+    for (const auto& pair : word_counts) {
+        vocab.push_back({pair.first, pair.second});
+    }
+    
+    if (verbose > 1) {
+        std::cerr << "Counted " << vocab.size() << " unique words.\n";
+    }
+    
+    // ========================================================================
+    // 第三步：排序
+    // ========================================================================
+    // 按词频降序排序，词频相同则按字母升序（保证输出稳定）
+    // 
+    // 如果设置了 max_vocab 限制，使用 partial_sort 只排序前 max_vocab 个
+    // partial_sort 时间复杂度 O(n * log(k))，比完全排序 O(n * log(n)) 更高效
+    long long vocab_size = static_cast<long long>(vocab.size());
+    long long actual_max = (max_vocab > 0 && max_vocab < vocab_size) 
+                           ? max_vocab : vocab_size;
+    
+    if (max_vocab > 0 && max_vocab < vocab_size) {
+        // 只需要前 max_vocab 个最高频词
+        std::partial_sort(vocab.begin(), 
+                          vocab.begin() + max_vocab, 
+                          vocab.end(), 
+                          compare_vocab_tie);
+    } else {
+        // 无限制，全部排序
+        std::sort(vocab.begin(), vocab.end(), compare_vocab_tie);
+    }
+    
+    // ========================================================================
+    // 第四步：输出结果
+    // ========================================================================
+    // 输出格式: "word count\n"
+    // 按词频降序输出，同时应用 min_count 和 max_vocab 过滤
+    long long i;
+    for (i = 0; i < actual_max; i++) {
+        // 如果词频低于阈值，停止输出
+        if (vocab[i].count < min_count) {
+            if (verbose > 0) {
+                std::cerr << "Truncating vocabulary at min count " 
+                          << min_count << ".\n";
+            }
+            break;
+        }
+        // 输出到标准输出
+        std::cout << vocab[i].word << " " << vocab[i].count << "\n";
+    }
+    
+    // 如果是因为 max_vocab 限制而截断
+    if (i == max_vocab && max_vocab < vocab_size) {
+        if (verbose > 0) {
+            std::cerr << "Truncating vocabulary at size " << max_vocab << ".\n";
+        }
+    }
+    
+    std::cerr << "Using vocabulary of size " << i << ".\n\n";
+    
+    return 0;
 }
 
 // ============================================================================

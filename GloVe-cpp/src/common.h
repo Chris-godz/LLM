@@ -57,19 +57,14 @@ struct HASHREC {
 /**
  * @brief 位运算哈希函数
  * 
- * TODO: 实现这个函数
  * 参考: GloVe/src/common.c 中的 bitwisehash
  */
 inline unsigned int bitwisehash(const std::string& word, size_t tsize, unsigned int seed) {
-    // TODO: 实现
-    // unsigned int h = seed;
-    // for (char c : word) {
-    //     h ^= ((h << 5) + c + (h >> 2));
-    // }
-    // return (h & 0x7fffffff) % tsize;
-    
-    std::hash<std::string> hasher;
-    return hasher(word) % tsize;
+    unsigned int h = seed;
+    for (char c : word) {
+        h ^= ((h << 5) + static_cast<unsigned char>(c) + (h >> 2));
+    }
+    return (h & 0x7fffffff) % tsize;
 }
 
 /**
