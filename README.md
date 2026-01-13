@@ -6,7 +6,8 @@
 - [Normalization](https://aicarrier.feishu.cn/wiki/WYnrwKwqeiCkuQkxRxgcvQ6Wnpd)
 - [Attention](https://aicarrier.feishu.cn/wiki/VHrqwDNooiwFnYkbPpmcSNH8nHH)
 - [RoPE](https://zhuanlan.zhihu.com/p/8306958113)
-
+- [GRU](https://zh.d2l.ai/chapter_recurrent-modern/gru.html)
+- [LSTM](https://zh.d2l.ai/chapter_recurrent-modern/lstm.html)
 
 
 
