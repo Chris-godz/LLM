@@ -1,0 +1,5 @@
+runs/
+outputs/
+__pycache__/
+model.bin
+model.bin.optim

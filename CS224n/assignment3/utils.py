@@ -14,7 +14,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import nltk
 import sentencepiece as spm
-nltk.download('punkt_tab')
+
+# Avoid network calls at import time (can make decode/train look "stuck").
+# Only download if the resource is missing.
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    try:
+        nltk.download('punkt_tab', quiet=True)
+    except Exception:
+        pass
 
 
 def pad_sents(sents, pad_token):
@@ -30,11 +39,12 @@ def pad_sents(sents, pad_token):
     sents_padded = []
 
     ### YOUR CODE HERE (~6 Lines)
-
-
-
+    max_len = max(len(sent) for sent in sents)
+    for sent in sents:
+        if len(sent) < max_len:
+            sent = sent + [pad_token] * (max_len - len(sent))
+        sents_padded.append(sent)
     ### END YOUR CODE
-
     return sents_padded
 
 
