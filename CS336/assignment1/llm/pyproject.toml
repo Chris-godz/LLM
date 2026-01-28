@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "einops>=0.8.1", # tensor operations
     "einx>=0.3.0", # more general tensor operations
+    "simple-parsing>=0.1.6", # dataclass to argparse
     "jaxtyping>=0.3.0", # type hints for pytorch/jax/numpy
     "numpy",
     "psutil>=6.1.1",
@@ -14,8 +15,8 @@ dependencies = [
     "regex>=2024.11.6", # more powerful regex than the builtin `re` module
     "submitit>=1.5.2", # job submission for SLURM
     "tiktoken>=0.9.0",
-    "torch~=2.6.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "torch~=2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'", # Intel Macs
+    "torch==2.10.0",
+    "torchvision",
     "tqdm>=4.67.1",
     "wandb>=0.19.7",
     "ty>=0.0.1a16",
@@ -32,6 +33,20 @@ module-root = ""
 [tool.uv]
 package = true
 python-preference = "managed"
+index-strategy = "unsafe-best-match"
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
 
 [tool.pytest.ini_options]
 log_cli = true
