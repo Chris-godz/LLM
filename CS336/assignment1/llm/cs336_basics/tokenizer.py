@@ -1,10 +1,36 @@
+import pickle
 import regex as re
+from functools import lru_cache
+from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Iterable, Iterator
 
 # 复用训练时的正则模式
 GPT2_PAT = re.compile(
     r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 )
+
+
+@lru_cache
+def gpt2_bytes_to_unicode() -> Dict[int, str]:
+    """
+    GPT-2 byte-to-unicode 映射
+    将 0-255 的字节值映射到可打印的 unicode 字符
+    """
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(ord("¡"), ord("¬") + 1)) + list(range(ord("®"), ord("ÿ") + 1))
+    cs = bs[:]
+    n = 0
+    for b in range(2**8):
+        if b not in bs:
+            bs.append(b)
+            cs.append(2**8 + n)
+            n += 1
+    return dict(zip(bs, [chr(c) for c in cs]))
+
+
+def gpt2_unicode_to_bytes() -> Dict[str, int]:
+    """GPT-2 unicode-to-byte 反向映射"""
+    return {v: k for k, v in gpt2_bytes_to_unicode().items()}
+
 
 class Tokenizer:
     def __init__(
@@ -122,3 +148,43 @@ class Tokenizer:
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
         for text in iterable:
             yield from self.encode(text)
+    
+    @classmethod
+    def from_files(
+        cls,
+        vocab_path: str | Path,
+        merges_path: str | Path,
+        special_tokens: Optional[List[str]] = None,
+    ) -> "Tokenizer":
+        """
+        从文件加载 tokenizer
+        
+        Args:
+            vocab_path: vocab pickle 文件路径
+            merges_path: merges txt 文件路径
+            special_tokens: 特殊 token 列表
+        
+        Returns:
+            Tokenizer 实例
+        """
+        # 加载 vocab (pickle 格式: dict[int, bytes])
+        with open(vocab_path, "rb") as f:
+            vocab = pickle.load(f)
+        
+        # 加载 merges (txt 格式，使用 GPT-2 unicode 编码)
+        unicode_to_byte = gpt2_unicode_to_bytes()
+        merges = []
+        
+        with open(merges_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                parts = line.split(" ")
+                if len(parts) == 2:
+                    # 将 GPT-2 unicode 表示转换回 bytes
+                    first = bytes([unicode_to_byte[c] for c in parts[0]])
+                    second = bytes([unicode_to_byte[c] for c in parts[1]])
+                    merges.append((first, second))
+        
+        return cls(vocab, merges, special_tokens)

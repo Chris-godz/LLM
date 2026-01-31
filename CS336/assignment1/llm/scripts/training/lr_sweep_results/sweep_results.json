@@ -1,0 +1,44 @@
+[
+  {
+    "lr": 0.0001,
+    "success": true,
+    "final_train_loss": 1.9422564387321473,
+    "final_val_loss": 1.9405682754516602,
+    "min_val_loss": 1.9389108276367188
+  },
+  {
+    "lr": 0.0003,
+    "success": true,
+    "final_train_loss": 1.5989100217819214,
+    "final_val_loss": 1.6184723854064942,
+    "min_val_loss": 1.6088110756874086
+  },
+  {
+    "lr": 0.0005,
+    "success": true,
+    "final_train_loss": 1.5209845066070558,
+    "final_val_loss": 1.5108369016647338,
+    "min_val_loss": 1.5108369016647338
+  },
+  {
+    "lr": 0.001,
+    "success": true,
+    "final_train_loss": 1.4215462327003479,
+    "final_val_loss": 1.43329998254776,
+    "min_val_loss": 1.43329998254776
+  },
+  {
+    "lr": 0.003,
+    "success": true,
+    "final_train_loss": 1.3627774119377136,
+    "final_val_loss": 1.3691245317459106,
+    "min_val_loss": 1.3691245317459106
+  },
+  {
+    "lr": 0.005,
+    "success": true,
+    "final_train_loss": 1.365589201450348,
+    "final_val_loss": 1.372335147857666,
+    "min_val_loss": 1.372335147857666
+  }
+]

@@ -2,6 +2,7 @@ from curses import noecho
 from turtle import forward
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import einx
 import math
 
@@ -80,6 +81,29 @@ class swiglu(nn.Module):
         upper = einx.dot("d_ff d_model , ... d_model -> ... d_ff", self.w3 , in_features)
         silu = gate * torch.sigmoid(gate)
         return einx.dot("d_model d_ff , ... d_ff -> ... d_model", self.w2 , silu * upper)
+
+class ffnsilu(nn.Module):
+    def __init__(self, d_model: int , d_ff: int) -> None:
+        super().__init__()
+        self.d_ff = d_ff
+        self.d_model = d_model
+        self.w1 = nn.Parameter(torch.empty(d_ff, d_model))      # up projection
+        self.w2 = nn.Parameter(torch.empty(d_model, d_ff))      # down projection
+        self._init_weight()
+
+    def _init_weight(self):
+        # w1: fan_in = d_model, fan_out = d_ff
+        std_1 = math.sqrt(2.0 / (self.d_model + self.d_ff))
+        nn.init.trunc_normal_(self.w1, mean=0.0, std=std_1, a=-3*std_1, b=3*std_1)
+        # w2: fan_in = d_ff, fan_out = d_model
+        std_2 = math.sqrt(2.0 / (self.d_ff + self.d_model))
+        nn.init.trunc_normal_(self.w2, mean=0.0, std=std_2, a=-3*std_2, b=3*std_2)
+
+    def forward(self, in_features):
+        # FFN_SiLU(x) = W2 * SiLU(W1 * x)
+        h = einx.dot("d_ff d_model , ... d_model -> ... d_ff", self.w1 , in_features)
+        h = F.silu(h)
+        return einx.dot("d_model d_ff , ... d_ff -> ... d_model", self.w2 , h)
 
 class RoPE(nn.Module):
     def __init__(self, theta: float, d_k: int, max_seq_len: int, device = None):
@@ -254,10 +278,7 @@ def multihead_self_attention(
 
 class TransformerBlock(nn.Module):
     """
-    Pre-norm Transformer block
-    forward:
-      y = x + MHA(RMSNorm(x))   (RoPE 只作用在 Q/K)
-      z = y + FFN(RMSNorm(y))   (FFN = SwiGLU)
+    Transformer block supporting various configurations (ablation study).
     """
 
     def __init__(
@@ -268,6 +289,10 @@ class TransformerBlock(nn.Module):
         max_seq_len: int,
         theta: float,
         device=None,
+        use_rmsnorm: bool = True,
+        norm_type: str = "pre",
+        position_encoding: str = "rope",
+        ffn_type: str = "swiglu",
     ):
         super().__init__()
         self.d_model = d_model
@@ -275,13 +300,27 @@ class TransformerBlock(nn.Module):
         self.d_ff = d_ff
         self.max_seq_len = max_seq_len
         self.theta = theta
+        self.use_rmsnorm = use_rmsnorm
+        self.norm_type = norm_type
+        self.position_encoding = position_encoding
 
-        self.ln1 = rmsnorm(d_model=d_model, eps=1e-5)
-        self.attn = MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads, device=device)
-        self.ln2 = rmsnorm(d_model=d_model, eps=1e-5)
-        self.ffn = swiglu(d_model=d_model, d_ff=d_ff)
+        if use_rmsnorm:
+            self.ln1 = rmsnorm(d_model=d_model, eps=1e-5)
+            self.attn = MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads, device=device)
+            self.ln2 = rmsnorm(d_model=d_model, eps=1e-5)
+        else:
+            self.ln1 = nn.Identity()
+            self.attn = MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads, device=device)
+            self.ln2 = nn.Identity()
 
-        # RoPE 没有可学习参数，但需要 buffer，所以保留为 Module 成员
+        if ffn_type == "swiglu":
+            self.ffn = swiglu(d_model=d_model, d_ff=d_ff)
+        elif ffn_type == "silu":
+            self.ffn = ffnsilu(d_model=d_model, d_ff=d_ff)
+        else:
+            raise ValueError(f"Unknown ffn_type: {ffn_type}")
+
+        # RoPE 
         head_dim = d_model // num_heads
         self.rope = RoPE(theta=theta, d_k=head_dim, max_seq_len=max_seq_len, device=device)
 
@@ -295,13 +334,28 @@ class TransformerBlock(nn.Module):
         if token_positions is None:
             token_positions = torch.arange(seq_len, device=x.device)
 
-        x_norm = self.ln1(x)
-        attn_out = self.attn(x_norm, rope=self.rope, token_positions=token_positions)
-        y = x + attn_out
+        # Determine RoPE usage
+        rope_module = self.rope if self.position_encoding == "rope" else None
 
-        y_norm = self.ln2(y)
-        z = y + self.ffn(y_norm)
-        return z
+        if self.norm_type == "pre":
+            # Pre-norm: x = x + Attention(Norm(x)); x = x + FFN(Norm(x))
+            x_norm = self.ln1(x)
+            attn_out = self.attn(x_norm, rope=rope_module, token_positions=token_positions)
+            y = x + attn_out
+
+            y_norm = self.ln2(y)
+            z = y + self.ffn(y_norm)
+            return z
+        elif self.norm_type == "post":
+            # Post-norm: x = Norm(x + Attention(x)); x = Norm(x + FFN(x))
+            # Note: For Post-norm, RoPE is applied inside attention on the queries/keys which are derived from the input x.
+            attn_out = self.attn(x, rope=rope_module, token_positions=token_positions)
+            y = self.ln1(x + attn_out)
+            
+            z = self.ln2(y + self.ffn(y))
+            return z
+        else:
+            raise ValueError(f"Unknown norm_type: {self.norm_type}")
 
 
 class TransformerLM(nn.Module):
@@ -324,6 +378,10 @@ class TransformerLM(nn.Module):
         d_ff: int,
         rope_theta: float,
         device=None,
+        use_rmsnorm: bool = True,
+        norm_type: str = "pre",
+        position_encoding: str = "rope",
+        ffn_type: str = "swiglu",
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -333,6 +391,7 @@ class TransformerLM(nn.Module):
         self.num_heads = num_heads
         self.d_ff = d_ff
         self.rope_theta = rope_theta
+        self.use_rmsnorm = use_rmsnorm
 
         # Token embedding
         self.token_embeddings = embedding(
@@ -350,12 +409,19 @@ class TransformerLM(nn.Module):
                 max_seq_len=context_length,
                 theta=rope_theta,
                 device=device,
+                use_rmsnorm=use_rmsnorm,
+                norm_type=norm_type,
+                position_encoding=position_encoding,
+                ffn_type=ffn_type,
             )
             for _ in range(num_layers)
         ])
 
         # Final layer norm
-        self.ln_final = rmsnorm(d_model=d_model, eps=1e-5, device=device)
+        if use_rmsnorm:
+            self.ln_final = rmsnorm(d_model=d_model, eps=1e-5, device=device)
+        else:
+            self.ln_final = nn.Identity()
 
         # Output projection (lm_head)
         self.lm_head = linear(

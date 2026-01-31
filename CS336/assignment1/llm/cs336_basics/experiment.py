@@ -30,10 +30,15 @@ class ExperimentConfig:
     num_layers: int = sp_field(default=4, alias="-nl", help="Transformer 层数")
     num_heads: int = sp_field(default=16, alias="-nh", help="注意力头数")
     rope_theta: float = sp_field(default=10000.0, help="RoPE theta 参数")
+    # 消融实验参数
+    use_rmsnorm: bool = sp_field(default=True, help="是否使用 RMSNorm")
+    norm_type: str = sp_field(default="pre", help="pre 或 post")
+    position_encoding: str = sp_field(default="rope", help="rope 或 none (NoPE)")
+    ffn_type: str = sp_field(default="swiglu", help="swiglu 或 silu")
     
-    # 训练配置 (CS336 Assignment 1: 327.68M tokens = batch_size * context_length * max_steps)
-    batch_size: int = sp_field(default=64, alias="-bs", help="批次大小")
-    max_steps: int = sp_field(default=20000, help="最大训练步数 (64*256*20000=327.68M tokens)")
+    # 训练配置 (与 ablation_results/baseline 一致: 108*256*20000 ≈ 553M tokens)
+    batch_size: int = sp_field(default=108, alias="-bs", help="批次大小 (baseline=108)")
+    max_steps: int = sp_field(default=20000, help="最大训练步数 (108*256*20000≈553M tokens)")
     learning_rate: float = sp_field(default=1e-3, alias="-lr", help="最大学习率")
     min_learning_rate: float = sp_field(default=1e-5, help="最小学习率")
     warmup_steps: int = sp_field(default=400, help="学习率 warmup 步数 (约 2% of max_steps)")
@@ -52,8 +57,8 @@ class ExperimentConfig:
     # 日志配置
     log_interval: int = sp_field(default=10, help="每多少步打印一次")
     eval_interval: int = sp_field(default=500, help="每多少步评估一次")
-    save_interval: int = sp_field(default=2000, help="每多少步保存一次")
-    checkpoint_dir: str = sp_field(default="scripts/training/checkpoints", help="Checkpoint 保存目录")
+    save_interval: int = sp_field(default=5000, help="每多少步保存一次")
+    checkpoint_dir: str = sp_field(default="scripts/training/checkpoints/tinystories", help="Checkpoint 保存目录")
     
     # 实验标识
     experiment_name: str = sp_field(default="tinystories_lm", alias="-name", help="实验名称")
@@ -85,6 +90,18 @@ class ExperimentConfig:
     def load(cls, path: str | Path) -> "ExperimentConfig":
         with open(path) as f:
             return cls.from_dict(json.load(f))
+
+
+@dataclass
+class OWTExperimentConfig(ExperimentConfig):
+    """OpenWebText 实验默认配置（数据/词表与 TinyStories 不同，其余与 baseline 一致，batch_size=108）。"""
+    vocab_size: int = sp_field(default=32000, alias="-vs", help="词表大小 (OWT 32K)")
+    train_data_path: str = sp_field(default="scripts/tokenization/owt_train.npy", help="OWT 训练数据路径")
+    val_data_path: str = sp_field(default="scripts/tokenization/owt_valid.npy", help="OWT 验证数据路径")
+    tokenizer_vocab_path: str = sp_field(default="scripts/tokenization/openweb/vocab_owt.pkl", help="OWT 词表路径")
+    tokenizer_merges_path: str = sp_field(default="scripts/tokenization/openweb/merges_owt.txt", help="OWT merges 路径")
+    checkpoint_dir: str = sp_field(default="scripts/training/checkpoints/openwebtext", help="OWT Checkpoint 保存目录")
+    experiment_name: str = sp_field(default="owt_lm", alias="-name", help="实验名称")
 
 
 @dataclass
@@ -198,6 +215,10 @@ class ExperimentLogger:
                 })
             except Exception as e:
                 print(f"[wandb] 记录失败: {e}")
+        
+        # 定期保存日志到文件（每 10 次 log 保存一次）
+        if len(self.logs) % 10 == 0:
+            self.save_logs()
     
     def _print_metrics(self, step: int, elapsed: float, metrics: dict):
         """打印指标到控制台"""

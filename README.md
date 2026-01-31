@@ -5,6 +5,8 @@
 
 
 # blogs
+- [Illustrated-transformer](https://jalammar.github.io/illustrated-transformer/)
+- [图解Transformer](https://datawhalechina.github.io/learn-nlp-with-transformers/#/./%E7%AF%87%E7%AB%A02-Transformer%E7%9B%B8%E5%85%B3%E5%8E%9F%E7%90%86/2.2-%E5%9B%BE%E8%A7%A3transformer)
 - [Normalization](https://aicarrier.feishu.cn/wiki/WYnrwKwqeiCkuQkxRxgcvQ6Wnpd)
 - [Attention](https://aicarrier.feishu.cn/wiki/VHrqwDNooiwFnYkbPpmcSNH8nHH)
 - [Additive Attention](https://zh.d2l.ai/chapter_attention-mechanisms/bahdanau-attention.html)
@@ -19,3 +21,4 @@
 # addtion material
 - [D2L](https://zh-v2.d2l.ai/index.html)
 - [dive-into-llms](https://github.com/Lordog/dive-into-llms)
+- [DataWhale-NLP-with-Transformers](https://datawhalechina.github.io/learn-nlp-with-transformers/#/)
