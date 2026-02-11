@@ -206,7 +206,29 @@ class BCTrainer:
         # HINT4: You want each of these collected rollouts to be of length self.params['ep_len']
 
         print("\nCollecting data to be used for training...")
-        paths, envsteps_this_batch = TODO
+        
+        # On the first iteration, load expert data if available
+        if itr == 0 and load_initial_expertdata is not None:
+            # Load expert data from pickle file
+            try:
+                with open(load_initial_expertdata, 'rb') as f:
+                    paths = pickle.load(f)
+                print(f"Loaded {len(paths)} expert trajectories from {load_initial_expertdata}")
+                # Calculate total timesteps
+                envsteps_this_batch = sum([len(path["reward"]) for path in paths])
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Expert data file not found: {load_initial_expertdata}")
+            except Exception as e:
+                raise RuntimeError(f"Error loading expert data from {load_initial_expertdata}: {e}")
+        else:
+            # Collect trajectories using the current policy
+            paths, envsteps_this_batch = utils.sample_trajectories(
+                self.env,
+                collect_policy,
+                self.params['batch_size'],
+                self.params['ep_len']
+            )
+            print(f"Collected {len(paths)} trajectories with {envsteps_this_batch} timesteps")
 
         # collect more rollouts with the same policy, to be saved as videos in tensorboard
         # note: here, we collect MAX_NVIDEO rollouts, each of length MAX_VIDEO_LEN
