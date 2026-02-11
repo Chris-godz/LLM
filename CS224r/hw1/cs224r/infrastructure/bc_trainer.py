@@ -210,11 +210,16 @@ class BCTrainer:
         # On the first iteration, load expert data if available
         if itr == 0 and load_initial_expertdata is not None:
             # Load expert data from pickle file
-            with open(load_initial_expertdata, 'rb') as f:
-                paths = pickle.load(f)
-            print(f"Loaded {len(paths)} expert trajectories from {load_initial_expertdata}")
-            # Calculate total timesteps
-            envsteps_this_batch = sum([len(path["reward"]) for path in paths])
+            try:
+                with open(load_initial_expertdata, 'rb') as f:
+                    paths = pickle.load(f)
+                print(f"Loaded {len(paths)} expert trajectories from {load_initial_expertdata}")
+                # Calculate total timesteps
+                envsteps_this_batch = sum([len(path["reward"]) for path in paths])
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Expert data file not found: {load_initial_expertdata}")
+            except Exception as e:
+                raise RuntimeError(f"Error loading expert data from {load_initial_expertdata}: {e}")
         else:
             # Collect trajectories using the current policy
             paths, envsteps_this_batch = utils.sample_trajectories(
