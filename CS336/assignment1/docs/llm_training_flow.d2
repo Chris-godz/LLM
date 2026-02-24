@@ -1,0 +1,334 @@
+direction: right
+
+# 1. 数据准备阶段
+Data: "原始语料库 (Raw Corpus)" {
+  shape: cylinder
+  style: {
+    fill: "#e3f2fd"
+    stroke: "#1565c0"
+  }
+}
+
+# 2. 分词器训练阶段 (BPE 核心逻辑)
+Tokenizer: "分词器训练 (BPE)" {
+  direction: down
+  style: {
+    fill: "#f5f5f5"
+    stroke: "#616161"
+    border-radius: 8
+  }
+
+  Init: "1. 字节化 (Byte-level)\n将所有文本转换为256个基础字节\n(初始词表大小=256)" { shape: rectangle }
+  Count: "2. 统计频次\n扫描语料，统计所有相邻Token对的出现频率" { shape: rectangle }
+  Merge: "3. 合并最高频对\n将频率最高的Pair合并为一个新的Token" { shape: rectangle }
+  Update: "4. 更新词表\n为新Token分配下一个可用ID，并记录合并规则" { shape: rectangle }
+  Condition: "达到目标词表大小?" {
+    shape: diamond
+    style: { fill: "#fff9c4" }
+  }
+
+  Init -> Count
+  Count -> Merge
+  Merge -> Update
+  Update -> Condition
+  Condition -> Count: "否 (继续循环)" {
+    style: { stroke-dash: 5; stroke: "#d32f2f" }
+  }
+}
+
+# 3. 产出物
+Artifacts: "分词器产出物" {
+  direction: down
+  style: {
+    fill: transparent
+    stroke: transparent
+  }
+
+  vocab: "vocab.json\n(Token与ID的映射字典)" {
+    shape: document
+    style.fill: "#e8f5e9"
+  }
+  
+  merges: "merges.txt\n(子词合并的优先级规则)" {
+    shape: document
+    style.fill: "#e8f5e9"
+  }
+}
+
+# 4. 模型输入与位置编码 (RoPE 第一性原理)
+ModelInput_RoPE: "模型输入与 RoPE (注意力机制深潜)" {
+  direction: down
+  style: {
+    fill: "#f3e5f5"
+    stroke: "#7b1fa2"
+    border-radius: 8
+  }
+
+  TokenIDs: "1. Token IDs\n(如: [1024, 56, 999])" { shape: rectangle }
+
+  Embedding: "2. 词嵌入 (Token Embedding)\n将离散ID映射为连续的高维向量\n(此时向量仅有语义，无位置信息)" { shape: rectangle }
+
+  QKV: "3. 线性投影 (Q, K, V)\n生成 Query, Key, Value 向量" { shape: rectangle }
+
+  RoPE_Group: "RoPE 第一性原理推演" {
+    direction: right
+    style: {
+      fill: transparent
+      stroke: "#ab47bc"
+      stroke-dash: 5
+    }
+    
+    AbsPE_Problem: |
+      痛点: 传统绝对位置编码 (Add)
+      Q = x_q + p_m, K = x_k + p_n
+      内积 Q·K = x_q·x_k + x_q·p_n + p_m·x_k + p_m·p_n
+      问题: 交叉项导致语义与位置耦合，无法纯粹表达相对距离！
+    |
+    AbsPE_Problem.shape: document
+    AbsPE_Problem.style: { fill: "#ffcdd2"; stroke: "#c62828" }
+
+    RoPE_Core: "4. 旋转位置编码 (RoPE)\n核心思想: 放弃加法，改用旋转。\n将 Q, K 视为复平面向量，\n按绝对位置 m 旋转 mθ 角度" {
+      shape: rectangle
+      style: { fill: "#e1bee7"; stroke: "#4a148c"; stroke-width: 2 }
+    }
+
+    RoPE_Concept: |
+      RoPE 核心思想与计算:
+      
+      1. 分而治之 (将高维空间分解为二维子空间的集合):
+         旋转在二维平面最自然。将 d 维向量两两分组，
+         分解为 d/2 个独立的二维子空间进行旋转。
+         公式: [q_2i, q_2i+1] × [ cos(mθ_i)  -sin(mθ_i) ]
+                                [ sin(mθ_i)   cos(mθ_i) ]
+      
+      2. 时针与秒针 (高维空间的多频旋转):
+         每个二维平面的旋转速度(频率 θ_i)不同。
+         θ_i = 10000^{-2i/d}
+         - 低维度(快频): 像秒针，对近距离Token敏感
+         - 高维度(慢频): 像时针，捕捉远距离Token依赖
+    |
+    RoPE_Concept.shape: document
+    RoPE_Concept.style: { fill: "#fff9c4"; stroke: "#fbc02d" }
+
+    AbsPE_Problem -> RoPE_Core: "破局思路"
+    RoPE_Core -> RoPE_Concept: "核心机制"
+  }
+
+  Attention: "5. 注意力计算\nSoftmax(Q_rope · K_rope^T / √d) * V" { shape: rectangle }
+
+  TokenIDs -> Embedding
+  Embedding -> QKV
+  QKV -> RoPE_Group.AbsPE_Problem: "为什么不用绝对位置？" { style.stroke-dash: 5 }
+  QKV -> RoPE_Group.RoPE_Core: "仅对 Q 和 K 进行旋转"
+  RoPE_Group.RoPE_Core -> Attention: "携带相对位置信息的 Q, K"
+  QKV -> Attention: "原始的 V (不旋转)"
+}
+
+# 模块间连线 (控制整体垂直流向)
+Data -> Tokenizer: "输入文本流"
+Tokenizer -> Artifacts: "训练完成"
+Artifacts -> ModelInput_RoPE: "文本经过分词器转换为 IDs"
+
+# 5. Transformer 核心层 (Transformer Block)
+TransformerBlock: "Transformer 堆叠 (N层 Block)" {
+  direction: down
+  style: {
+    fill: "#e8f5e9"
+    stroke: "#2e7d32"
+    border-radius: 8
+  }
+
+  InputX: "输入特征 X\n[batch_size, seq_len, d_model]" { shape: rectangle; style: { fill: transparent; stroke: transparent } }
+
+  PreNorm1: "1. RMSNorm (归一化)\n第一性: 放弃均值平移，仅做方差缩放。\n高维空间中'方向比大小更重要'，\nRMSNorm 保证了向量方向的稳定性且计算更轻量。\n\n输入: [batch_size, seq_len, d_model]\n输出: [batch_size, seq_len, d_model]" {
+    shape: rectangle
+    style: { fill: "#c8e6c9"; stroke: "#388e3c" }
+  }
+
+  MHA: "2. 多头自注意力 (Multi-Head Attention)\n第一性: '兼听则明'。\n将 Q,K,V 切分为 num_heads 个独立的头，\n允许模型在不同的表示子空间中\n同时捕捉语法、实体、情感等多种上下文关系。\n\n内部维度流转:\n1. 线性投影: X -> Q, K, V [batch_size, seq_len, d_model]\n2. 拆分多头: -> [batch_size, num_heads, seq_len, d_k]\n   (其中 d_k = d_model / num_heads)\n3. RoPE 旋转: 仅对 Q, K 注入位置信息\n4. Causal Mask: 遮蔽未来信息 (右上角设为 -inf)\n5. Attention: Softmax(Q·K^T / √d_k) · V\n6. 拼接多头: -> [batch_size, seq_len, d_model]\n7. 输出投影: -> [batch_size, seq_len, d_model]" {
+    shape: rectangle
+    style: { fill: "#bbdefb"; stroke: "#1976d2" }
+  }
+
+  # 补充 Self-Attention 和 Causal Mask 的第一性原理解释
+  SelfAttention_Concept: |
+    Self-Attention 的 "Self" 体现在哪？
+    
+    1. 同源性: Q, K, V 都是由同一个输入 X 线性投影而来的。
+       (在交叉注意力 Cross-Attention 中，Q 来自解码器，K,V 来自编码器)
+    2. 内部交互: 句子中的每个 Token 都在和同一个句子中的其他 Token 计算相关性，
+       从而理解自己在当前上下文中的确切含义。
+       
+    Causal Mask (因果掩码) 的作用:
+    
+    1. 目的: 防止“偷看答案”。在自回归生成中，第 t 个词只能看到前 t-1 个词。
+    2. 实现: 构造一个上三角矩阵 (右上角全为 True)。
+       在计算完 Q·K^T (注意力分数) 后，将 Mask 为 True 的位置强行设为 -inf。
+       这样经过 Softmax 后，未来 Token 的权重就会变成 0。
+  |
+  SelfAttention_Concept.shape: document
+  SelfAttention_Concept.style: { fill: "#e3f2fd"; stroke: "#1565c0"; stroke-dash: 5 }
+
+  MHA -> SelfAttention_Concept: "核心机制解析" { style.stroke-dash: 5 }
+
+  Add1: "⊕ 残差连接 (Residual)\n第一性: '信息高速公路'。\nX = X + MHA(Norm(X))\n确保梯度平滑回传，防止网络退化。\n\n输出: [batch_size, seq_len, d_model]" {
+    shape: rectangle
+    style: { fill: "#ffecb3"; stroke: "#fbc02d"; border-radius: 20 }
+  }
+
+  PreNorm2: "3. RMSNorm (归一化)\n\n输入: [batch_size, seq_len, d_model]\n输出: [batch_size, seq_len, d_model]" {
+    shape: rectangle
+    style: { fill: "#c8e6c9"; stroke: "#388e3c" }
+  }
+
+  FFN: "4. 前馈网络 (FFN) + SwiGLU\n第一性: '非线性特征加工与筛选'。\nAttention 只是 Token 间的信息混合，\nFFN 负责对每个 Token 独立升维加工。\nSwiGLU 门控机制动态决定特征的激活程度。\n\n内部维度流转:\n1. 升维投影 (W1, W3): [..., d_model] -> [..., d_ff]\n2. 激活 (SiLU): gate = W1·X * Sigmoid(W1·X)\n3. 门控相乘: hidden = gate * (W3·X) [..., d_ff]\n4. 降维投影 (W2): [..., d_ff] -> [..., d_model]" {
+    shape: rectangle
+    style: { fill: "#ffe0b2"; stroke: "#f57c00" }
+  }
+
+  Add2: "⊕ 残差连接 (Residual)\nX = X + FFN(Norm(X))\n\n输出: [batch_size, seq_len, d_model]" {
+    shape: rectangle
+    style: { fill: "#ffecb3"; stroke: "#fbc02d"; border-radius: 20 }
+  }
+
+  # 内部连线 (主干道)
+  InputX -> PreNorm1
+  PreNorm1 -> MHA: "包含 QKV 投影与 RoPE"
+  MHA -> Add1
+  Add1 -> PreNorm2
+  PreNorm2 -> FFN
+  FFN -> Add2
+
+  # 残差连线 (跳跃连接)
+  InputX -> Add1: "直达 (Skip Connection)" { style: { stroke-dash: 5; stroke: "#fbc02d"; stroke-width: 2 } }
+  Add1 -> Add2: "直达 (Skip Connection)" { style: { stroke-dash: 5; stroke: "#fbc02d"; stroke-width: 2 } }
+}
+
+# 6. 输出层与损失计算 (LM Head & Loss)
+OutputLayer: "输出层与损失计算 (LM Head & Loss)" {
+  direction: down
+  style: {
+    fill: "#fce4ec"
+    stroke: "#c2185b"
+    border-radius: 8
+  }
+
+  FinalNorm: "1. 最终归一化 (Final RMSNorm)\n输入: [batch_size, seq_len, d_model]\n输出: [batch_size, seq_len, d_model]" { shape: rectangle }
+
+  LMHead: "2. 语言模型头 (LM Head)\n第一性: '词表映射'。\n将高维隐藏状态映射回词表大小的原始得分 (Logits)。\n注意：此时还不是概率！\n\n线性投影: [..., d_model] -> [..., vocab_size]" { shape: rectangle }
+
+  LossCalc: "3. 交叉熵损失 (Cross-Entropy Loss)\n第一性: '最大化正确答案的概率'。\n\n1. 预测值 (Logits): [batch_size, seq_len, vocab_size]\n   (这是未归一化的原始得分)\n2. 真实值 (Targets): [batch_size, seq_len]\n   (每个位置是正确的下一个 Token ID)\n3. 内部计算过程:\n   a. Softmax: 将 Logits 转换为概率分布 (0~1)\n   b. 查表: 找到 Target ID 对应的那个预测概率 P\n   c. 算 Loss: -log(P) (只惩罚正确答案概率不够高)\n\n注: PyTorch 中 nn.CrossEntropyLoss 会自动\n在内部做 Softmax，所以直接输入 Logits 即可。" { shape: rectangle }
+
+  FinalNorm -> LMHead
+  LMHead -> LossCalc
+}
+
+# 7. 模型评价与训练循环 (Evaluation & Training Loop)
+TrainingLoop: "模型评价与训练循环 (Training Loop)" {
+  direction: down
+  style: {
+    fill: "#f3e5f5"
+    stroke: "#7b1fa2"
+    border-radius: 8
+  }
+
+  Backward: "1. 反向传播 (Backward Pass)\nloss.backward()\n计算 Loss 对模型所有参数的梯度。" { shape: rectangle }
+
+  Optimizer: "2. 优化器更新 (Optimizer Step)\nAdamW 优化器根据梯度更新权重。\n包含梯度裁剪 (Gradient Clipping) 防止梯度爆炸。" { shape: rectangle }
+
+  Evaluation: "3. 模型评价 (Evaluation)\n第一性: '防止自欺欺人'。\n\n在独立的验证集 (Validation Set) 上\n关闭梯度计算 (torch.no_grad)，\n计算 Validation Loss 和 Perplexity (困惑度)。\nPerplexity = exp(CrossEntropyLoss)，\n直观反映模型在预测下一个词时的平均候选数量。" {
+    shape: document
+    style: { fill: "#e1bee7"; stroke: "#4a148c" }
+  }
+
+  Backward -> Optimizer
+  Optimizer -> Evaluation: "每隔 N 步进行评估"
+}
+
+# 8. 推理与生成 (Inference & Generation)
+Inference: "推理与生成 (Autoregressive Generation)" {
+  direction: down
+  style: {
+    fill: "#e0f7fa"
+    stroke: "#00838f"
+    border-radius: 8
+  }
+
+  Prompt: "1. 提示词输入 (Prompt)\n经过 Tokenizer 转换为 Token IDs" { shape: rectangle }
+
+  Forward: "2. 前向传播 (Forward Pass)\n通过 Transformer 拿到最后一个 Token 的 Logits" { shape: rectangle }
+
+  Temperature: "3. 温度缩放 (Temperature Scaling)\n第一性: '调节创造力与确定性'。\n公式: probs = Softmax(Logits / T)\n- T < 1: 分布变尖锐，更确定 (保守)\n- T = 1: 原始分布\n- T > 1: 分布变平缓，更随机 (创造力)" {
+    shape: rectangle
+    style: { fill: "#b2ebf2"; stroke: "#0097a7" }
+  }
+
+  TopP: "4. Top-p 采样 (Nucleus Sampling)\n第一性: '动态截断长尾'。\n(注: 代码中实现的是 Top-p 而非 Top-k)\n将概率降序排列，只保留累积概率达到 p 的头部候选词，\n其余概率置 0 并重新归一化。\n比 Top-k 更灵活，能根据概率分布的平缓程度动态调整候选池大小。" {
+    shape: rectangle
+    style: { fill: "#80deea"; stroke: "#00acc1" }
+  }
+
+  Sample: "5. 依概率采样 (Multinomial Sampling)\n从过滤后的概率分布中掷骰子，选出下一个 Token" { shape: rectangle }
+
+  Concat: "6. 拼接与自回归 (Autoregressive)\n将新 Token 拼接到输入末尾，\n重复步骤 2-5，直到生成 <EOS> 或达到最大长度" {
+    shape: rectangle
+    style: { fill: "#4dd0e1"; stroke: "#00bcd4"; border-radius: 20 }
+  }
+
+  Prompt -> Forward
+  Forward -> Temperature
+  Temperature -> TopP
+  TopP -> Sample
+  Sample -> Concat
+  Concat -> Forward: "循环生成" { style: { stroke-dash: 5; stroke: "#00838f" } }
+}
+
+# 连接最后的部分
+ModelInput_RoPE -> TransformerBlock.InputX: "进入 N 层 Transformer 堆叠"
+TransformerBlock -> OutputLayer: "Transformer 最终输出"
+OutputLayer -> TrainingLoop: "训练阶段: 计算 Loss"
+OutputLayer.LMHead -> Inference.Forward: "推理阶段: 获取 Logits" { style: { stroke-dash: 5; stroke: "#00838f" } }
+
+# 布局优化：使用网格布局
+grid-rows: 3
+grid-columns: 3
+
+Data {
+  grid-row: 1
+  grid-column: 1
+}
+
+Tokenizer {
+  grid-row: 1
+  grid-column: 2
+}
+
+Artifacts {
+  grid-row: 1
+  grid-column: 3
+}
+
+ModelInput_RoPE {
+  grid-row: 2
+  grid-column: 1
+}
+
+TransformerBlock {
+  grid-row: 2
+  grid-column: 2
+}
+
+OutputLayer {
+  grid-row: 2
+  grid-column: 3
+}
+
+TrainingLoop {
+  grid-row: 3
+  grid-column: 2
+}
+
+Inference {
+  grid-row: 3
+  grid-column: 3
+}

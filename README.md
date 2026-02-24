@@ -12,6 +12,7 @@
 - [Additive Attention](https://zh.d2l.ai/chapter_attention-mechanisms/bahdanau-attention.html)
 - [RoPE](https://zhuanlan.zhihu.com/p/8306958113)
 - [RoPE](https://zhuanlan.zhihu.com/p/1963547389718692709)
+- [MHA](https://zhuanlan.zhihu.com/p/626820422)
 - [GRU](https://zh.d2l.ai/chapter_recurrent-modern/gru.html)
 - [LSTM](https://zh.d2l.ai/chapter_recurrent-modern/lstm.html)
 - [LSTM](https://colah.github.io/posts/2015-08-Understanding-LSTMs/)
