@@ -38,6 +38,30 @@ python cs224r/scripts/run_hw1.py \
 	--video_log_freq -1
 ```
 
+```
+python cs224r/scripts/run_hw1.py \
+        --expert_policy_file cs224r/policies/experts/HalfCheetah.pkl \
+        --env_name HalfCheetah-v4 --exp_name bc_halfcheetah --n_iter 1 \
+        --expert_data cs224r/expert_data/expert_data_HalfCheetah-v4.pkl \
+        --video_log_freq -1
+```
+
+```
+python cs224r/scripts/run_hw1.py \
+        --expert_policy_file cs224r/policies/experts/Hopper.pkl \
+        --env_name Hopper-v4 --exp_name bc_hopper --n_iter 1 \
+        --expert_data cs224r/expert_data/expert_data_Hopper-v4.pkl \
+        --video_log_freq -1
+```
+
+```
+python cs224r/scripts/run_hw1.py \
+        --expert_policy_file cs224r/policies/experts/Walker2d.pkl \
+        --env_name Walker2d-v4 --exp_name bc_walker2d --n_iter 1 \
+        --expert_data cs224r/expert_data/expert_data_Walker2d-v4.pkl \
+        --video_log_freq -1
+```
+
 Make sure to also try another environment.
 See the homework PDF for more details on what else you need to run.
 To generate videos of the policy, remove the `--video_log_freq -1` flag.
@@ -54,18 +78,27 @@ python cs224r/scripts/run_hw1.py \
     --video_log_freq -1
 ```
 
-Make sure to also try another environment.
-See the homework PDF for more details on what else you need to run.
-
-## Visualization the saved tensorboard event file:
-
-You can visualize your runs using tensorboard:
 ```
-tensorboard --logdir data
+python cs224r/scripts/run_hw1.py \
+    --expert_policy_file cs224r/policies/experts/HalfCheetah.pkl \
+    --env_name HalfCheetah-v4 --exp_name dagger_halfcheetah --n_iter 10 \
+    --do_dagger --expert_data cs224r/expert_data/expert_data_HalfCheetah-v4.pkl \
+    --video_log_freq -1
 ```
 
-You will see scalar summaries as well as videos of your trained policies (in the 'images' tab).
+```
+python cs224r/scripts/run_hw1.py \
+    --expert_policy_file cs224r/policies/experts/Hopper.pkl \
+    --env_name Hopper-v4 --exp_name dagger_hopper --n_iter 10 \
+    --do_dagger --expert_data cs224r/expert_data/expert_data_Hopper-v4.pkl \
+    --video_log_freq -1
+```
 
+```
+python cs224r/scripts/run_hw1.py \
+    --expert_policy_file cs224r/policies/experts/Walker2d.pkl \
+    --env_name Walker2d-v4 --exp_name dagger_walker2d --n_iter 10 \
+    --do_dagger --expert_data cs224r/expert_data/expert_data_Walker2d-v4.pkl \
 You can choose to visualize specific runs with a comma-separated list:
 ```
 tensorboard --logdir data/run1,data/run2,data/run3...
